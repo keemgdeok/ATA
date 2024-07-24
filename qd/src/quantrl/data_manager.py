@@ -1,9 +1,11 @@
 import os
+import sys
 import pandas as pd
 import numpy as np
 
-from quantylab.rltrader import settings
 
+
+from quantrl import settings
 
 COLUMNS_CHART_DATA = ['date', 'open', 'high', 'low', 'close', 'volume']
 

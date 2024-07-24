@@ -4,9 +4,9 @@ import logging
 import argparse
 import json
 
-from quantylab.rltrader import settings
-from quantylab.rltrader import utils
-from quantylab.rltrader import data_manager
+from quantrl import settings
+from quantrl import utils
+from quantrl import data_manager
 
 
 if __name__ == '__main__':
@@ -74,7 +74,7 @@ if __name__ == '__main__':
     logger.info(params)
     
     # Backend 설정, 로그 설정을 먼저하고 RLTrader 모듈들을 이후에 임포트해야 함
-    from quantylab.rltrader.learners import ReinforcementLearner, DQNLearner, \
+    from quantrl.learners import ReinforcementLearner, DQNLearner, \
         PolicyGradientLearner, ActorCriticLearner, A2CLearner, A3CLearner
 
     common_params = {}
