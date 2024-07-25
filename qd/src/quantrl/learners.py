@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 import abc
 import collections
@@ -7,12 +8,15 @@ import time
 import json
 import numpy as np
 from tqdm import tqdm
-from quantylab.rltrader.environment import Environment
-from quantylab.rltrader.agent import Agent
-from quantylab.rltrader.networks import Network, DNN, LSTMNetwork, CNN
-from quantylab.rltrader.visualizer import Visualizer
-from quantylab.rltrader import utils
-from quantylab.rltrader import settings
+
+
+
+from quantrl.environment import Environment
+from quantrl.agent import Agent
+from quantrl.networks import Network, DNN, LSTMNetwork, CNN
+from quantrl.visualizer import Visualizer
+from quantrl import utils
+from quantrl import settings
 
 
 logger = logging.getLogger(settings.LOGGER_NAME)
