@@ -9,7 +9,8 @@ LOGGER_NAME = 'rltrader'
 
 # 경로 설정
 BASE_DIR = os.environ.get('QUANTRL_BASE', 
-    os.path.abspath(os.path.join(__file__, os.path.pardir, os.path.pardir, os.path.pardir)))
+    os.path.abspath(os.path.join(__file__, os.path.pardir, os.path.pardir, os.path.pardir))) #, os.path.pardirs
+#print(BASE_DIR)
 
 
 # 로케일 설정
