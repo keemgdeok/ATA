@@ -21,21 +21,18 @@ from quantrl import dataloader
 from quantrl import utils
 from quantrl import settings
 
-
 import torch
-
 
 
 logger = logging.getLogger(settings.LOGGER_NAME)
 
 
-
 class SacdLearner(Sacd):
     lock = threading.Lock()
     def __init__(self, env, output_path, initial_balance, min_trading_price, max_trading_price, 
-                 chart_data, training_data, num_steps=1, batch_size=60, memory_size=1000000, 
-                 gamma=0.99, multi_step=1, target_entropy_ratio=0.98, start_steps=20000, update_interval=5, 
-                 target_update_interval=8000, use_per=False, dueling_net=True, num_eval_steps=125000, 
+                 chart_data, training_data, num_steps=1, batch_size=32, memory_size=1000000, 
+                 gamma=0.99, multi_step=1, target_entropy_ratio=0.98, start_steps=20000, update_interval=20, 
+                 target_update_interval=100, use_per=False, dueling_net=True, num_eval_steps=125000, 
                  max_episode_steps=27000, log_interval=10, eval_interval=1000, cuda=True, seed=0, 
                  gen_output=True,
                  *args, **kwargs):
@@ -59,12 +56,11 @@ class SacdLearner(Sacd):
         self.target_entropy_ratio = target_entropy_ratio
         self.start_steps = start_steps
         self.update_interval = update_interval
-        self.tartget_update_interval = target_update_interval
+        self.target_update_interval = target_update_interval
         self.gen_output = gen_output
         self.output_path = output_path
         
         self.training_data_idx = -1
-        
         self.num_buy = 0
         self.num_sell = 0
         self.num_hold = 0
@@ -86,6 +82,7 @@ class SacdLearner(Sacd):
                 for f in os.listdir(self.epoch_summary_dir):
                     os.remove(os.path.join(self.epoch_summary_dir, f))
 
+        min_portfolio_value = 1e8
         max_portfolio_value = 0
         epoch_win_cnt = 0
         
@@ -105,7 +102,7 @@ class SacdLearner(Sacd):
             if state is None:
                 print("next_sample is None")
                 exit()
-            print(state)
+
             action, confidence = self.explore(state)
             reward = self.agent.act(action, confidence)
 
@@ -119,7 +116,7 @@ class SacdLearner(Sacd):
             self.memory.append(state, action, reward, next_state, done)
             rewards.append(reward)
         
-            if learning and (step+1) % self.update_interval == 0:
+            if learning and (step+1) % self.update_interval == 0 and step > self.batch_size:
                 q1_loss, q2_loss, policy_loss, entropy_loss = self.learn()
                 tqdm.write(f"step {step+1}/{len(self.training_data)}, Q1 Loss: {q1_loss:.4f}, Q2 Loss: {q2_loss:.4f}, Policy Loss: {policy_loss:.4f}, Entropy Loss: {entropy_loss:.4f}")
         
@@ -128,6 +125,10 @@ class SacdLearner(Sacd):
                 q2_losses.append(q2_loss)
                 policy_losses.append(policy_loss)
                 entropy_losses.append(entropy_loss)
+            
+            #print(f"self.target_update_interval: {self.target_update_interval}")
+            if (step+1) % self.target_update_interval == 0:
+                self.update_target()
         
         
             action_name = 'Hold'
@@ -137,19 +138,24 @@ class SacdLearner(Sacd):
                 action_name = 'Sell'
                 
             logger.debug(f'[STEP {step}/{len(self.training_data)}] '
-                f'Action:{action_name} '
+                f'Action:{action_name} Intensity:{confidence.item():.2f} '
                 f'Stocks:{self.agent.num_stocks} Current Price:{self.env.get_price():,.0f} Average Buy Price:{int(self.agent.avg_buy_price):,.0f} '
                 f'Balance:{self.agent.balance:,.0f} PV:{self.agent.portfolio_value:,.0f}')
-
+            
+            min_portfolio_value = min(min_portfolio_value, self.agent.portfolio_value)
             max_portfolio_value = max(max_portfolio_value, self.agent.portfolio_value)
             if self.agent.portfolio_value > self.agent.initial_balance:
                 epoch_win_cnt += 1
 
         logger.debug(f'[{self.env}]'
-            f'Max PV:{max_portfolio_value:,.0f} #Win:{epoch_win_cnt}')
-            
+            f'Max PV:{max_portfolio_value:,.0f} Min PV:{min_portfolio_value:,.0f} #Win:{epoch_win_cnt}')
+        
+        xx=0
+        while xx < self.batch_size:
+            xx += self.update_interval 
+        
         # Plot the losses
-        x = np.arange(5, 1516, 5)
+        x = np.arange(xx, len(self.training_data), self.update_interval)
         fig, axs = plt.subplots(1, 4, figsize=(30, 10))
         # Q1 Losses
         axs[0].plot(x, q1_losses, label='Q1 Loss')
@@ -173,9 +179,9 @@ class SacdLearner(Sacd):
         axs[2].legend()
         axs[2].set_title('Entropy Loss over epochs')
         
-        
-        rw = np.arange(0, 1516)
-        axs[3].plot(rw, rewards, label='Rewards', color='blue')
+        moving_avg_rewards = np.convolve(rewards, np.ones(30)/30, mode='valid')
+        rw = np.arange(29, len(self.training_data))
+        axs[3].plot(rw, moving_avg_rewards, label='Rewards', color='blue')
         axs[3].set_xlabel('Epochs')
         axs[3].set_ylabel('Reward')
         axs[3].legend()
@@ -254,7 +260,7 @@ if __name__ == "__main__":
     logger.addHandler(stream_handler)
     logger.addHandler(file_handler)
             
-    chart_data, training_data = dataloader.load_data('005930')
+    chart_data, training_data = dataloader.load_data('000660') # 000660 # 005930
     env = Environment(chart_data=chart_data)
 
     learner = SacdLearner(env=env, output_path=output_path, 

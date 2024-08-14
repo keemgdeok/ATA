@@ -44,7 +44,7 @@ class DQNBase(BaseNetwork):
 
 class CateoricalPolicy(nn.Module):
 
-    def __init__(self, input_dim, num_actions, hidden_dim=256, num_layers=2, shared=False):
+    def __init__(self, input_dim, num_actions, hidden_dim=512, num_layers=3, shared=False):
         super().__init__()
         self.shared = shared
         self.attention = Attention(hidden_dim)
@@ -56,17 +56,21 @@ class CateoricalPolicy(nn.Module):
             ResidualBlock(hidden_dim, hidden_dim, 512),  # Second Residual Block
             nn.LayerNorm(512),
             nn.ReLU(inplace=True),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=0.2),
             nn.Linear(512, num_actions)
         ).apply(self._initialize_weights)
-        """
+        
         self.intensity_head = nn.Sequential(
-            nn.Linear(hidden_dim, 512),
+            ResidualBlock(hidden_dim, hidden_dim, 512),
+            nn.LayerNorm(512),
+            nn.Linear(hidden_dim, 256),
             nn.ReLU(inplace=True),
-            nn.Linear(512, 1),
+            nn.Dropout(p=0.2),
+            nn.Linear(256, 1),
             nn.Sigmoid()  # Intensity between 0 and 1
+    
         ).apply(self._initialize_weights)
-        """
+        
         
     def _initialize_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -104,13 +108,14 @@ class CateoricalPolicy(nn.Module):
         action_dist = Categorical(action_probs)
         actions = action_dist.sample().view(-1, 1)
 
-        #intensity = self.intensity_head(states[:, -1, :])
-
+        intensity = self.intensity_head(states[:, -1, :])
+        #intensity = torch.exp(intensity) - 1
+        #print(f"Intensity: {intensity}")
         # Avoid numerical instability
         z = (action_probs == 0.0).float() * 1e-8
         log_action_probs = torch.log(action_probs + z)
 
-        return actions, action_probs, log_action_probs, #intensity
+        return actions, action_probs, log_action_probs, intensity
     
 class ResidualBlock(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
@@ -168,14 +173,26 @@ class LSTMQNetwork(nn.Module):
                 nn.LayerNorm(512),
                 nn.ReLU(inplace=True),
                 nn.Dropout(p=0.1),
-                nn.Linear(512, num_actions)
+                
+                nn.Linear(512, 256),
+                nn.LayerNorm(256),
+                nn.ReLU(inplace=True),
+                nn.Dropout(p=0.1),
+                
+                nn.Linear(256, num_actions)
             ).apply(self._initialize_weights)
             self.v_head = nn.Sequential(
                 nn.Linear(hidden_dim, 512),  # Wider layer
                 nn.LayerNorm(512),
                 nn.ReLU(inplace=True),
                 nn.Dropout(p=0.1),
-                nn.Linear(512, 1)
+                
+                nn.Linear(512, 256),
+                nn.LayerNorm(256),
+                nn.ReLU(inplace=True),
+                nn.Dropout(p=0.1),
+                
+                nn.Linear(256, 1)
             ).apply(self._initialize_weights)
 
     def _initialize_weights(self, m):
@@ -212,7 +229,7 @@ class LSTMQNetwork(nn.Module):
 
 
 class TwinnedQNetwork(nn.Module):
-    def __init__(self, input_dim, num_actions, hidden_dim=256, num_layers=2, dueling_net=True):
+    def __init__(self, input_dim, num_actions, hidden_dim=512, num_layers=3, dueling_net=True):
         super().__init__()
         self.Q1 = LSTMQNetwork(input_dim, num_actions, hidden_dim, num_layers, dueling_net)
         self.Q2 = LSTMQNetwork(input_dim, num_actions, hidden_dim, num_layers, dueling_net)

@@ -58,20 +58,19 @@ class Sacd(BaseSacd):
     def explore(self, state):
         state = torch.tensor(state, dtype=torch.float32).unsqueeze(0).unsqueeze(1).to(self.device)  # Adding batch and sequence dimensions
         with torch.no_grad():
-            action, action_probs, _ = self.policy.sample(state)
+            action, action_probs, _ , intensity = self.policy.sample(state)
         action = action.item()
         
-        #print(f"explore actions: {action, self.cnt}")
         confidence = action_probs[0, action].item()  # Confidence based on the action probability
-        return action, confidence
+        return action, intensity # confidence
 
     def exploit(self, state):
         state = torch.tensor(state, dtype=torch.float32).unsqueeze(0).unsqueeze(1).to(self.device)  # Adding batch and sequence dimensions
         with torch.no_grad():
-            action, action_probs, _= self.policy.sample(state)
+            action, action_probs, _, intensity= self.policy.sample(state)
         action = action.item()
         confidence = 1.0 
-        return action, confidence
+        return action, intensity # confidence
 
     def update_target(self):
         self.target_critic.load_state_dict(self.online_critic.state_dict())
@@ -90,7 +89,7 @@ class Sacd(BaseSacd):
 
     def calc_target_q(self, states, actions, rewards, next_states, dones):
         with torch.no_grad():
-            _, action_probs, log_action_probs= self.policy.sample(next_states)
+            _, action_probs, log_action_probs, _= self.policy.sample(next_states)
             next_q1, next_q2 = self.target_critic(next_states)
             next_q = (action_probs * (
                 torch.min(next_q1, next_q2) - self.alpha * log_action_probs
@@ -105,13 +104,6 @@ class Sacd(BaseSacd):
         rewards = batch['rewards']
         next_states = batch['next_states'] 
         dones = batch['dones']
-        
-        #print(f"States: {states}")
-        #print(f"Actions: {actions}")
-        #print(f"Rewards: {rewards}")
-        #print(f"Next States: {next_states}")
-        #print(f"Dones: {dones}")
-
         
         curr_q1, curr_q2 = self.calc_current_q(states, actions, rewards, next_states, dones)
         target_q = self.calc_target_q(states, actions, rewards, next_states, dones)
@@ -134,7 +126,7 @@ class Sacd(BaseSacd):
         states = batch['states']
 
         # (Log of) probabilities to calculate expectations of Q and entropies.
-        _, action_probs, log_action_probs = self.policy.sample(states)
+        _, action_probs, log_action_probs, _ = self.policy.sample(states)
         with torch.no_grad():
             # Q for every actions to calculate expectations of Q.
             q1, q2 = self.online_critic(states)

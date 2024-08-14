@@ -12,7 +12,7 @@ def load_data(code):
     #df = pd.read_csv('time_series_data.csv', parse_dates=['date'], index_col='date')
     #f.dropna(df, inplace=True)
 
-    for filename in os.listdir(os.path.join(settings.BASE_DIR, 'data' )):
+    for filename in os.listdir(os.path.join(settings.BASE_DIR, 'data')):
         if filename.startswith(code):
             df = pd.read_csv(
                 os.path.join(settings.BASE_DIR, 'data', filename), 

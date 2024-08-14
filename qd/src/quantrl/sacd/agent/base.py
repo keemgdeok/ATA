@@ -10,12 +10,13 @@ from quantrl.sacd.utils import update_params, RunningMeanStats
 
 class BaseSacd(ABC):
 
-    def __init__(self, env, output_path, num_steps=100000, batch_size=64,
+    def __init__(self, env, output_path, num_steps=100000, batch_size=3,
                  memory_size=1000000, gamma=0.99, multi_step=1,
                  target_entropy_ratio=0.98, start_steps=20000,
                  update_interval=4, target_update_interval=8000,
                  use_per=False, num_eval_steps=125000, max_episode_steps=27000,
-                 log_interval=10, eval_interval=1000, cuda=True, seed=0):
+                 log_interval=10, eval_interval=1000, cuda=True, seed=0,
+                 ):
         super().__init__()
         self.env = env
         #self.test_env = test_env
@@ -72,10 +73,14 @@ class BaseSacd(ABC):
         self.target_update_interval = target_update_interval
         self.use_per = False
         self.num_eval_steps = num_eval_steps
-        self.max_episode_steps = max_episode_steps
+       
         self.log_interval = log_interval
         self.eval_interval = eval_interval
-
+        
+        self.test_data_idx = 0
+        #self.max_episode_steps = len(self.test_data)
+        
+        
     def run(self):
         while True:
             self.train_episode()
@@ -173,21 +178,17 @@ class BaseSacd(ABC):
         self.learning_steps += 1
         
         if self.use_per:
-            batch, weights = self.memory.sample(5) # self.batch_size
+            batch, weights = self.memory.sample(self.batch_size) 
         else:
-            batch = self.memory.sample(5) # self.batch_size
+            batch = self.memory.sample(self.batch_size) 
             # Set priority weights to 1 when we don't use PER.
-            #print(f"Batch: {batch}")
-            weights = torch.ones(5).to(self.device) 
+            weights = torch.ones(self.batch_size).to(self.device) 
             #weights = 1.
 
-        #print(f"Batch : {batch}")
         q1_loss, q2_loss, errors, mean_q1, mean_q2 = \
             self.calc_critic_loss(batch, weights)
-        #print(f"q_loss: {q1_loss}, error: {errors}")
             
         policy_loss, entropies = self.calc_policy_loss(batch, weights)
-        #print(f"policy_loss: {policy_loss}, entropies: {entropies}")
         
         entropy_loss = self.calc_entropy_loss(entropies, weights)
 
@@ -197,75 +198,55 @@ class BaseSacd(ABC):
         update_params(self.alpha_optim, entropy_loss)
 
         self.alpha = self.log_alpha.exp()
-        #print(f'log_alpha: {self.log_alpha.item()}, alpha: {self.alpha.item()}, entropy_loss: {entropy_loss.item()}')
+
         #if self.use_per:
         #    self.memory.update_priority(errors)
-        """
-        if self.learning_steps % self.log_interval == 0:
-            self.writer.add_scalar(
-                'loss/Q1', q1_loss.detach().item(),
-                self.learning_steps)
-            self.writer.add_scalar(
-                'loss/Q2', q2_loss.detach().item(),
-                self.learning_steps)
-            self.writer.add_scalar(
-                'loss/policy', policy_loss.detach().item(),
-                self.learning_steps)
-            self.writer.add_scalar(
-                'loss/alpha', entropy_loss.detach().item(),
-                self.learning_steps)
-            self.writer.add_scalar(
-                'stats/alpha', self.alpha.detach().item(),
-                self.learning_steps)
-            self.writer.add_scalar(
-                'stats/mean_Q1', mean_q1, self.learning_steps)
-            self.writer.add_scalar(
-                'stats/mean_Q2', mean_q2, self.learning_steps)
-            self.writer.add_scalar(
-                'stats/entropy', entropies.detach().mean().item(),
-                self.learning_steps)
-        """
+        
         return q1_loss.detach().item(), q2_loss.detach().item(), \
             policy_loss.detach().item(), entropy_loss.detach().item()
 
-    '''
-    def evaluate(self):
-        num_episodes = 0
-        num_steps = 0
-        total_return = 0.0
+    # def test_sample(self):
+        
+    #     if len(self.test_data) > self.test_data_idx + 1:
+    #         self.test_data_idx += 1
+    #         self.sample = self.test_data.iloc[self.test_data_idx].tolist()
+ 
+    #         return self.sample
+    #     return None
+    
+    # def evaluate(self):
+    #     num_episodes = 0
+    #     num_steps = 0
+    #     total_return = 0.0
 
-        while True:
-            state = self.test_env.reset()
-            episode_steps = 0
-            episode_return = 0.0
-            done = False
-            while (not done) and episode_steps <= self.max_episode_steps:
-                action = self.exploit(state)
-                next_state, reward, done, _ = self.test_env.step(action)
-                num_steps += 1
-                episode_steps += 1
-                episode_return += reward
-                state = next_state
+    #     while True:
+    #         self.test_data_idx = 0
+    #         state = self.test_sample()
+    #         episode_steps = 0
+    #         episode_return = 0.0
+    #         done = False
+    #         while (not done) and episode_steps <= self.max_episode_steps:
+    #             action = self.exploit(state)
+    #             next_state, reward, done, _ = self.test_env.step(action)
+    #             num_steps += 1
+    #             episode_steps += 1
+    #             episode_return += reward
+    #             state = next_state
 
-            num_episodes += 1
-            total_return += episode_return
+    #         num_episodes += 1
+    #         total_return += episode_return
 
-            if num_steps > self.num_eval_steps:
-                break
+    #         if num_steps > self.num_eval_steps:
+    #             break
 
-        mean_return = total_return / num_episodes
+    #     mean_return = total_return / num_episodes
 
-        if mean_return > self.best_eval_score:
-            self.best_eval_score = mean_return
-            self.save_models(os.path.join(self.model_dir, 'best'))
+    #     if mean_return > self.best_eval_score:
+    #         self.best_eval_score = mean_return
+    #         self.save_models(os.path.join(self.model_dir, 'best'))
 
-        self.writer.add_scalar(
-            'reward/test', mean_return, self.steps)
-        print('-' * 60)
-        print(f'Num steps: {self.steps:<5}  '
-              f'return: {mean_return:<5.1f}')
-        print('-' * 60)
-    '''
+        # visualize
+    
     @abstractmethod
     def save_models(self, save_dir):
         if not os.path.exists(save_dir):

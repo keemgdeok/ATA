@@ -109,7 +109,7 @@ class Agent:
         return True
 
     def decide_trading_unit(self, confidence):
-        if np.isnan(confidence):
+        if confidence is None:
             return self.min_trading_price
         added_trading_price = max(min(
             int(confidence * (self.max_trading_price - self.min_trading_price)),
@@ -128,9 +128,11 @@ class Agent:
         # Update the past portfolio values list
         self.past_portfolio_values.append(current_portfolio_value)
 
+        reward *= 10
+        #reward /= self.initial_balance
         # Normalize the reward (optional)
         reward = np.clip(reward / self.initial_balance, -1, 1)
-
+        
         return reward
 
     def act(self, action, confidence):
@@ -187,4 +189,4 @@ class Agent:
         # Calculate the reward based on FinRL structure
         reward = self.calculate_reward()
         
-        return reward * 10
+        return reward
