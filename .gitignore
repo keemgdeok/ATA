@@ -6,3 +6,15 @@ token/
 *.pyc
 __pycache__/
 .DS_Store
+
+# user unnecessary file
+conf/
+models/
+v3/
+base_learner.py
+data_manager.py
+learners.py
+test.py
+visualizer.py
+profile_printer.py
+networks/
