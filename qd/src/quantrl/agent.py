@@ -164,19 +164,33 @@ class Agent:
                 self.num_buy += 1
 
         # 매도
+        # elif action == Agent.ACTION_SELL:
+        #     trading_unit = self.decide_trading_unit(confidence)
+        #     trading_unit = min(trading_unit, self.num_stocks)
+        #     invest_amount = curr_price * (
+        #         1 - (self.TRADING_TAX + self.TRADING_CHARGE)) * trading_unit
+        #     if invest_amount > 0:
+        #         self.avg_buy_price = \
+        #             (self.avg_buy_price * self.num_stocks - curr_price * trading_unit) \
+        #             / (self.num_stocks - trading_unit) \
+        #             if self.num_stocks > trading_unit else 0
+        #         self.num_stocks -= trading_unit
+        #         self.balance += invest_amount
+        #         self.num_sell += 1
+        
         elif action == Agent.ACTION_SELL:
             trading_unit = self.decide_trading_unit(confidence)
             trading_unit = min(trading_unit, self.num_stocks)
             invest_amount = curr_price * (
                 1 - (self.TRADING_TAX + self.TRADING_CHARGE)) * trading_unit
+
             if invest_amount > 0:
-                self.avg_buy_price = \
-                    (self.avg_buy_price * self.num_stocks - curr_price * trading_unit) \
-                    / (self.num_stocks - trading_unit) \
-                    if self.num_stocks > trading_unit else 0
                 self.num_stocks -= trading_unit
                 self.balance += invest_amount
                 self.num_sell += 1
+                
+                if self.num_stocks == 0:
+                    self.avg_buy_price = 0  # Reset avg_buy_price when all stocks are sold
 
         # 관망
         elif action == Agent.ACTION_HOLD:

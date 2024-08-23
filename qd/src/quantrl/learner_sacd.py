@@ -30,9 +30,9 @@ logger = logging.getLogger(settings.LOGGER_NAME)
 class SacdLearner(Sacd):
     lock = threading.Lock()
     def __init__(self, env, output_path, initial_balance, min_trading_price, max_trading_price, 
-                 chart_data, training_data, num_steps=1, batch_size=32, memory_size=1000000, 
-                 gamma=0.99, multi_step=1, target_entropy_ratio=0.98, start_steps=20000, update_interval=20, 
-                 target_update_interval=100, use_per=False, dueling_net=True, num_eval_steps=125000, 
+                 chart_data, training_data, num_steps=1, batch_size=60, memory_size=1000000, 
+                 gamma=0.99, multi_step=1, target_entropy_ratio=0.99, start_steps=20000, update_interval=5, 
+                 target_update_interval=500, use_per=False, dueling_net=True, num_eval_steps=125000, 
                  max_episode_steps=27000, log_interval=10, eval_interval=1000, cuda=True, seed=0, 
                  gen_output=True,
                  *args, **kwargs):
@@ -45,10 +45,7 @@ class SacdLearner(Sacd):
         self.chart_data = chart_data
         self.training_data = training_data
         self.memory = LazyMemory(memory_size, (57,), self.device)
-        #self.visualizer = Visualizer()
-        
-        #self.lr = lr
-        #self.gamma = gamma
+
         self.num_steps = num_steps
         self.batch_size = batch_size
         self.memory_size = memory_size
@@ -86,12 +83,14 @@ class SacdLearner(Sacd):
         max_portfolio_value = 0
         epoch_win_cnt = 0
         
-        rewards = []
+        # rewards = []
         q1_losses = []
         q2_losses = []
         policy_losses = []
         entropy_losses = []
-        
+        profitloss = []
+        actions = []
+        avg_buy_prices = []
         self.reset()
         
         # Initialize total losses for the epoch
@@ -114,7 +113,8 @@ class SacdLearner(Sacd):
             if done:
                 next_state = state[:]
             self.memory.append(state, action, reward, next_state, done)
-            rewards.append(reward)
+            actions.append(action)
+            avg_buy_prices.append(self.agent.avg_buy_price)
         
             if learning and (step+1) % self.update_interval == 0 and step > self.batch_size:
                 q1_loss, q2_loss, policy_loss, entropy_loss = self.learn()
@@ -144,19 +144,21 @@ class SacdLearner(Sacd):
             
             min_portfolio_value = min(min_portfolio_value, self.agent.portfolio_value)
             max_portfolio_value = max(max_portfolio_value, self.agent.portfolio_value)
+            profitloss.append(self.agent.portfolio_value)
+            
             if self.agent.portfolio_value > self.agent.initial_balance:
                 epoch_win_cnt += 1
 
         logger.debug(f'[{self.env}]'
             f'Max PV:{max_portfolio_value:,.0f} Min PV:{min_portfolio_value:,.0f} #Win:{epoch_win_cnt}')
-        
+        tqdm.write(f"Max PV:{max_portfolio_value:,.0f} Min PV:{min_portfolio_value:,.0f} #Win:{epoch_win_cnt}")
         xx=0
-        while xx < self.batch_size:
+        while xx <= self.batch_size:
             xx += self.update_interval 
         
         # Plot the losses
-        x = np.arange(xx, len(self.training_data), self.update_interval)
-        fig, axs = plt.subplots(1, 4, figsize=(30, 10))
+        x = np.arange(xx, len(self.training_data)+1, self.update_interval)
+        fig, axs = plt.subplots(4, 1, figsize=(40, 30))
         # Q1 Losses
         axs[0].plot(x, q1_losses, label='Q1 Loss')
         axs[0].plot(x, q2_losses, label='Q2 Loss')
@@ -173,23 +175,41 @@ class SacdLearner(Sacd):
         axs[1].set_title('Policy Loss over epochs')
 
         # Entropy Losses
-        axs[2].plot(x, entropy_losses, label='Entropy Loss', color='green')
+        axs[2].plot(x, entropy_losses, label='Entropy Loss', color='red')
         axs[2].set_xlabel('Epochs')
         axs[2].set_ylabel('Loss')
         axs[2].legend()
         axs[2].set_title('Entropy Loss over epochs')
         
-        moving_avg_rewards = np.convolve(rewards, np.ones(30)/30, mode='valid')
-        rw = np.arange(29, len(self.training_data))
-        axs[3].plot(rw, moving_avg_rewards, label='Rewards', color='blue')
+        step_profit = np.arange(0, len(self.training_data))
+        normalized_profitloss = np.array(profitloss) / 1e8
+        normalized_close = np.array(chart_data['Close'] / chart_data.loc[0, 'Close'])
+        actions = np.array(actions)
+        avg_buy_prices = np.array(avg_buy_prices)
+        avg_buy_prices = avg_buy_prices / chart_data.loc[0, 'Close']
+        axs[3].plot(step_profit, normalized_profitloss, label='profitloss', color='green')
+        axs[3].plot(step_profit, normalized_close, label='close', color='black')
+        axs[3].plot(step_profit, avg_buy_prices, label='avg_buy_prices', color='orange')
+        axs[3].scatter(step_profit[actions == 0], normalized_close[actions == 0], marker='o', color='r', label='Buy', s=10)
+        axs[3].scatter(step_profit[actions == 1], normalized_close[actions == 1], marker='o', color='b', label='Sell', s=10)
         axs[3].set_xlabel('Epochs')
-        axs[3].set_ylabel('Reward')
-        axs[3].legend()
+        axs[3].set_ylabel('Profitloss vs Close')
+        axs[3].legend(loc='upper left')
         axs[3].set_title('Reward over epochs')
-
+        
+        
         # 그래프 저장
-        plt.tight_layout()
+        #plt.tight_layout()
         plt.savefig('/mnt/c/Users/keemg/dev/qd/output/test_scad/losses_over_epochs.png')
+
+    # def stock_close(self):
+    #     close = []
+    #     for i in range(len(self.training_data)):
+    #         close.append(chart_data['Close'])
+    #         print(chart_data['Close'])
+            
+    #     return close
+            
 
     def predict(self):
         self.agent.reset()
@@ -272,4 +292,8 @@ if __name__ == "__main__":
     
     learner.run(learning=True)
     
+    # print(f'chart_data.loc[0, "Close"]: {chart_data.loc[0, "Close"]}')
+    # normalized_data = list(chart_data['Close'] / chart_data.loc[0, 'Close'])
+    # print(f'normalized_data: {normalized_data}')
+
    
