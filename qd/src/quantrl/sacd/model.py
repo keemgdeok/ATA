@@ -44,29 +44,30 @@ class DQNBase(BaseNetwork):
 
 class CateoricalPolicy(nn.Module):
 
-    def __init__(self, input_dim, num_actions, hidden_dim=512, num_layers=3, shared=False):
+    def __init__(self, input_dim, num_actions, hidden_dim=256, num_layers=2, shared=False):
         super().__init__()
         self.shared = shared
         self.attention = Attention(hidden_dim)
         if not shared:
-            self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True, dropout=0.2)
+            self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
             self.layer_norm = nn.LayerNorm(hidden_dim)
             
         self.head = nn.Sequential(
-            ResidualBlock(hidden_dim, hidden_dim, 512),  # Second Residual Block
+            ResidualBlock(hidden_dim, hidden_dim, 512),  
+            #nn.Linear(hidden_dim, 512),
             nn.LayerNorm(512),
             nn.ReLU(inplace=True),
-            nn.Dropout(p=0.2),
+                       
             nn.Linear(512, num_actions)
         ).apply(self._initialize_weights)
         
         self.intensity_head = nn.Sequential(
             ResidualBlock(hidden_dim, hidden_dim, 512),
+            #nn.Linear(hidden_dim, 512),
             nn.LayerNorm(512),
-            nn.Linear(hidden_dim, 256),
             nn.ReLU(inplace=True),
-            nn.Dropout(p=0.2),
-            nn.Linear(256, 1),
+            
+            nn.Linear(512, 1),
             nn.Sigmoid()  # Intensity between 0 and 1
     
         ).apply(self._initialize_weights)
@@ -155,7 +156,7 @@ class Attention(nn.Module):
 class LSTMQNetwork(nn.Module):
     def __init__(self, input_dim, num_actions, hidden_dim, num_layers, dueling_net=True):
         super().__init__()
-        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True, dropout=0.2)
+        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
         self.layer_norm = nn.LayerNorm(hidden_dim)
         self.residual_block = ResidualBlock(hidden_dim, hidden_dim, hidden_dim)
         self.attention = Attention(hidden_dim)
@@ -163,36 +164,34 @@ class LSTMQNetwork(nn.Module):
 
         if not dueling_net:
             self.head = nn.Sequential(
-                nn.Linear(hidden_dim, 128),
+                nn.Linear(hidden_dim, 512),
                 nn.ReLU(inplace=True),
-                nn.Linear(128, num_actions)
+                nn.Linear(512, num_actions)
             ).apply(self._initialize_weights)
         else:
             self.a_head = nn.Sequential(
-                nn.Linear(hidden_dim, 512),  # Wider layer
+                nn.Linear(hidden_dim, 512),
                 nn.LayerNorm(512),
                 nn.ReLU(inplace=True),
-                nn.Dropout(p=0.1),
+
+                # nn.Linear(128, 64),
+                # nn.LayerNorm(64),
+                # nn.ReLU(inplace=True),
                 
-                nn.Linear(512, 256),
-                nn.LayerNorm(256),
-                nn.ReLU(inplace=True),
-                nn.Dropout(p=0.1),
                 
-                nn.Linear(256, num_actions)
+                nn.Linear(512, num_actions)
             ).apply(self._initialize_weights)
-            self.v_head = nn.Sequential(
-                nn.Linear(hidden_dim, 512),  # Wider layer
+            self.v_head = nn.Sequential(             
+                nn.Linear(hidden_dim, 512),
                 nn.LayerNorm(512),
                 nn.ReLU(inplace=True),
-                nn.Dropout(p=0.1),
+
+                # nn.Linear(128, 64),
+                # nn.LayerNorm(64),
+                # nn.ReLU(inplace=True),
                 
-                nn.Linear(512, 256),
-                nn.LayerNorm(256),
-                nn.ReLU(inplace=True),
-                nn.Dropout(p=0.1),
                 
-                nn.Linear(256, 1)
+                nn.Linear(512, 1)
             ).apply(self._initialize_weights)
 
     def _initialize_weights(self, m):
@@ -229,7 +228,7 @@ class LSTMQNetwork(nn.Module):
 
 
 class TwinnedQNetwork(nn.Module):
-    def __init__(self, input_dim, num_actions, hidden_dim=512, num_layers=3, dueling_net=True):
+    def __init__(self, input_dim, num_actions, hidden_dim=256, num_layers=2, dueling_net=True):
         super().__init__()
         self.Q1 = LSTMQNetwork(input_dim, num_actions, hidden_dim, num_layers, dueling_net)
         self.Q2 = LSTMQNetwork(input_dim, num_actions, hidden_dim, num_layers, dueling_net)

@@ -137,7 +137,6 @@ class LazyMemory(dict):
             rewards = torch.tensor(self['reward'][indices], dtype=torch.float32).to(self.device)
             dones = torch.tensor(self['done'][indices], dtype=torch.float32).to(self.device)
 
-            #print(f"Batch Actions: {actions}")
             
             return {
                 'states': states,
