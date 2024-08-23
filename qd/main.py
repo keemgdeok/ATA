@@ -3,23 +3,24 @@ import sys
 import logging
 import argparse
 import json
+import torch
 
 from quantrl import settings
 from quantrl import utils
 from quantrl import data_manager
-
+from quantrl.environment import Environment
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', choices=['train', 'test', 'update', 'predict'], default='train')
-    parser.add_argument('--ver', choices=['v1', 'v2', 'v3', 'v4', 'v4.1', 'v4.2'], default='v4.1')
+    parser.add_argument('--ver', choices=['v1', 'v2', 'v3', 'v4', 'v4.1', 'v4.2'], default='v3')
     parser.add_argument('--name', default=utils.get_time_str())
     parser.add_argument('--stock_code', nargs='+')
-    parser.add_argument('--rl_method', choices=['dqn', 'pg', 'ac', 'a2c', 'a3c', 'monkey'], default='a2c')
+    parser.add_argument('--rl_method', choices=['dqn', 'pg', 'ac', 'a2c', 'a3c', 'monkey', 'sacd'], default='sacd')
     parser.add_argument('--net', choices=['dnn', 'lstm', 'cnn', 'monkey'], default='dnn')
     parser.add_argument('--backend', choices=['pytorch', 'tensorflow', 'plaidml'], default='pytorch')
-    parser.add_argument('--start_date', default='20200101')
-    parser.add_argument('--end_date', default='20201231')
+    parser.add_argument('--start_date', default='20180101')
+    parser.add_argument('--end_date', default='20191231')
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--discount_factor', type=float, default=0.7)
     parser.add_argument('--balance', type=int, default=100000000)
@@ -29,8 +30,6 @@ if __name__ == '__main__':
     output_name = f'{args.mode}_{args.name}_{args.rl_method}_{args.net}'
     learning = args.mode in ['train', 'update']
     reuse_models = args.mode in ['test', 'update', 'predict']
-    value_network_name = f'{args.name}_{args.rl_method}_{args.net}_value.mdl'
-    policy_network_name = f'{args.name}_{args.rl_method}_{args.net}_policy.mdl'
     start_epsilon = 1 if args.mode in ['train', 'update'] else 0
     num_epoches = 100 if args.mode in ['train', 'update'] else 1
     num_steps = 5 if args.net in ['lstm', 'cnn'] else 1
@@ -48,14 +47,9 @@ if __name__ == '__main__':
         os.makedirs(output_path)
 
     # 파라미터 기록
-    params = json.dumps(vars(args))
+    params = json.dumps(vars(args), ensure_ascii=False)
     with open(os.path.join(output_path, 'params.json'), 'w') as f:
         f.write(params)
-
-    # 모델 경로 준비
-    # 모델 포멧은 TensorFlow는 h5, PyTorch는 pickle
-    value_network_path = os.path.join(settings.BASE_DIR, 'models', value_network_name)
-    policy_network_path = os.path.join(settings.BASE_DIR, 'models', policy_network_name)
 
     # 로그 기록 설정
     log_path = os.path.join(output_path, f'{output_name}.log')
@@ -72,10 +66,14 @@ if __name__ == '__main__':
     logger.addHandler(stream_handler)
     logger.addHandler(file_handler)
     logger.info(params)
+
     
     # Backend 설정, 로그 설정을 먼저하고 RLTrader 모듈들을 이후에 임포트해야 함
-    from quantrl.learners import ReinforcementLearner, DQNLearner, \
-        PolicyGradientLearner, ActorCriticLearner, A2CLearner, A3CLearner
+    from quantrl.base_learner import ReinforcementLearner
+    from quantrl.learners import DQNLearner, PolicyGradientLearner, ActorCriticLearner, A2CLearner, A3CLearner
+    from quantrl.learner_sacd import SacdLearner
+
+    # Define the SAC configuration
 
     common_params = {}
     list_stock_code = []
@@ -102,34 +100,40 @@ if __name__ == '__main__':
             'discount_factor': args.discount_factor, 'start_epsilon': start_epsilon,
             'output_path': output_path, 'reuse_models': reuse_models}
 
+        # 환경 설정
+        env = Environment(chart_data=chart_data)
+        
         # 강화학습 시작
         learner = None
+        print(f"RL Method: {args.rl_method}")
         if args.rl_method != 'a3c':
             common_params.update({'stock_code': stock_code,
                 'chart_data': chart_data, 
                 'training_data': training_data,
                 'min_trading_price': min_trading_price, 
                 'max_trading_price': max_trading_price})
+            print(f"Common Params: {common_params}")
             if args.rl_method == 'dqn':
-                learner = DQNLearner(**{**common_params, 
-                    'value_network_path': value_network_path})
+                learner = DQNLearner(**{**common_params})
             elif args.rl_method == 'pg':
-                learner = PolicyGradientLearner(**{**common_params, 
-                    'policy_network_path': policy_network_path})
+                learner = PolicyGradientLearner(**{**common_params})
             elif args.rl_method == 'ac':
-                learner = ActorCriticLearner(**{**common_params, 
-                    'value_network_path': value_network_path, 
-                    'policy_network_path': policy_network_path})
+                learner = ActorCriticLearner(**{**common_params})
             elif args.rl_method == 'a2c':
-                learner = A2CLearner(**{**common_params, 
-                    'value_network_path': value_network_path, 
-                    'policy_network_path': policy_network_path})
+                learner = A2CLearner(**{**common_params})
             elif args.rl_method == 'monkey':
                 common_params['net'] = args.rl_method
                 common_params['num_epoches'] = 10
                 common_params['start_epsilon'] = 1
                 learning = False
                 learner = ReinforcementLearner(**common_params)
+            elif args.rl_method == 'sacd':
+                learner = SacdLearner(env=env, output_path=output_path, 
+                                    initial_balance=args.balance, 
+                                    min_trading_price=min_trading_price,
+                                    max_trading_price=max_trading_price, 
+                                    chart_data=chart_data, training_data=training_data)
+            print(f"Learner: {learner}")
         else:
             list_stock_code.append(stock_code)
             list_chart_data.append(chart_data)
@@ -144,9 +148,7 @@ if __name__ == '__main__':
             'list_chart_data': list_chart_data, 
             'list_training_data': list_training_data,
             'list_min_trading_price': list_min_trading_price, 
-            'list_max_trading_price': list_max_trading_price,
-            'value_network_path': value_network_path, 
-            'policy_network_path': policy_network_path})
+            'list_max_trading_price': list_max_trading_price})
     
     assert learner is not None
 

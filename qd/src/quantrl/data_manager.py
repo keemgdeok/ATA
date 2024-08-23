@@ -34,37 +34,6 @@ COLUMNS_TRAINING_DATA_V3 = list(map(
 def load_data(code, date_from, date_to, ver='v2'):
     if ver in ['v3', 'v4']:
         return load_data_v3_v4(code, date_from, date_to, ver)
-    elif ver in ['v4.1', 'v4.2']:
-        stock_filename = ''
-        market_filename = ''
-        data_dir = os.path.join(settings.BASE_DIR, 'data', 'v4.1')
-        for filename in os.listdir(data_dir):
-            if code in filename:
-                stock_filename = filename
-            elif 'market' in filename:
-                market_filename = filename
-        
-        chart_data, training_data = load_data_v4_1(
-            os.path.join(data_dir, stock_filename),
-            os.path.join(data_dir, market_filename),
-            date_from, date_to
-        )
-        if ver == 'v4.1':
-            return chart_data, training_data
-        
-        tips_filename = ''
-        taylor_us_filename = ''
-        data_dir = os.path.join(settings.BASE_DIR, 'data', 'v4.2')
-        for filename in os.listdir(data_dir):
-            if filename.startswith('tips'):
-                tips_filename = filename
-            if filename.startswith('taylor_us'):
-                taylor_us_filename = filename
-        return load_data_v4_2(
-            pd.concat([chart_data, training_data], axis=1),
-            os.path.join(data_dir, tips_filename),
-            os.path.join(data_dir, taylor_us_filename)
-        )
 
 
 def load_data_v3_v4(code, date_from, date_to, ver):
@@ -94,7 +63,7 @@ def load_data_v3_v4(code, date_from, date_to, ver):
     df = df.sort_values(by='date').reset_index(drop=True)
 
     # NaN 처리
-    df = df.fillna(method='ffill').fillna(method='bfill').reset_index(drop=True)
+    df = df.ffill().bfill().reset_index(drop=True)
     df = df.fillna(0)
 
     # 기간 필터링
