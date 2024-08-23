@@ -152,6 +152,8 @@ class SacdLearner(Sacd):
         logger.debug(f'[{self.env}]'
             f'Max PV:{max_portfolio_value:,.0f} Min PV:{min_portfolio_value:,.0f} #Win:{epoch_win_cnt}')
         tqdm.write(f"Max PV:{max_portfolio_value:,.0f} Min PV:{min_portfolio_value:,.0f} #Win:{epoch_win_cnt}")
+        
+        # visualized
         xx=0
         while xx <= self.batch_size:
             xx += self.update_interval 
