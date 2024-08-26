@@ -2,7 +2,7 @@ import os
 import sys
 import numpy as np
 
-from quantrl import utils
+import utils
 
 class Agent:
     # 에이전트 상태가 구성하는 값 개수

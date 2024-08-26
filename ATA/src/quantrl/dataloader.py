@@ -3,7 +3,8 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
-from quantrl import settings
+# from quantrl 
+import settings
 
 COLUMNS = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']
 

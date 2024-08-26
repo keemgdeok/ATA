@@ -4,8 +4,8 @@ import numpy as np
 import torch
 #from torch.utils.tensorboard import SummaryWriter
 
-from quantrl.sacd.memory import LazyMultiStepMemory, LazyPrioritizedMultiStepMemory
-from quantrl.sacd.utils import update_params, RunningMeanStats
+from sacd.memory import LazyMultiStepMemory, LazyPrioritizedMultiStepMemory
+from sacd.utils import update_params, RunningMeanStats
 
 
 class BaseSacd(ABC):

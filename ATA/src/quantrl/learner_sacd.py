@@ -11,15 +11,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from collections import deque
 
-from quantrl.sacd.memory.base import LazyMultiStepMemory, LazyMemory
-from quantrl.sacd.agent.sacd import Sacd
-from quantrl.agent import Agent
-from quantrl.environment import Environment
-from quantrl.visualizer import Visualizer
-from quantrl import data_manager
-from quantrl import dataloader
-from quantrl import utils
-from quantrl import settings
+from sacd.memory.base import LazyMultiStepMemory, LazyMemory
+from sacd.agent.sacd import Sacd
+from agent import Agent
+from environment import Environment
+
+
+import dataloader
+import utils
+import settings
 
 import torch
 
@@ -202,15 +202,7 @@ class SacdLearner(Sacd):
         
         # 그래프 저장
         #plt.tight_layout()
-        plt.savefig('/mnt/c/Users/keemg/dev/qd/output/test_scad/losses_over_epochs.png')
-
-    # def stock_close(self):
-    #     close = []
-    #     for i in range(len(self.training_data)):
-    #         close.append(chart_data['Close'])
-    #         print(chart_data['Close'])
-            
-    #     return close
+        plt.savefig('/mnt/c/Users/keemg/dev/ATA/output/test_scad/losses_over_epochs.png')
             
 
     def predict(self):

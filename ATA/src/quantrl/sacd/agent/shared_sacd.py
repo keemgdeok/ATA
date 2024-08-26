@@ -3,9 +3,9 @@ import numpy as np
 import torch
 from torch.optim import Adam
 
-from quantrl.sacd.agent.base import BaseSacd
-from quantrl.sacd.model import DQNBase, TwinnedQNetwork, CateoricalPolicy
-from quantrl.sacd.utils import disable_gradients
+from sacd.agent.base import BaseSacd
+from sacd.model import DQNBase, TwinnedQNetwork, CateoricalPolicy
+from sacd.utils import disable_gradients
 
 
 class SharedSacdAgent(BaseSacd):
