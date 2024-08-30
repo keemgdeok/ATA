@@ -7,3 +7,4 @@ scikit-learn
 tensorflow==2.16.1
 torch==2.3.1
 finrl
+kafka-python
